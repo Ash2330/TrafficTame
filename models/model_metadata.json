@@ -1,0 +1,208 @@
+{
+  "dataset": "UCI Metro Interstate Traffic Volume",
+  "training_window": "2012-10-02 to 2017-12-31 (Train + Validation refit)",
+  "test_window": "2018-01-01 to 2018-09-30 (Strictly single evaluation)",
+  "thresholds_file": "models/congestion_thresholds.json",
+  "baseline_a_refit": {
+    "name": "Historical Mean by (Day_of_Week, Hour) on Train+Val",
+    "test_metrics": {
+      "MAE": 268.77,
+      "RMSE": 469.44,
+      "R2": 0.9435,
+      "Accuracy": 88.96,
+      "Within_1_Class": 99.62,
+      "Confusion_Matrix": [
+        [
+          1418,
+          133,
+          8,
+          4
+        ],
+        [
+          10,
+          1397,
+          119,
+          13
+        ],
+        [
+          0,
+          130,
+          2199,
+          111
+        ],
+        [
+          0,
+          0,
+          189,
+          763
+        ]
+      ]
+    },
+    "test_sliced_mae": {
+      "Weekday_AM_Rush (07-08)": 510.27,
+      "Weekday_PM_Rush (16-17)": 462.78,
+      "Weekends": 283.41,
+      "Holidays": 1117.59,
+      "Snow_Hours": 590.98,
+      "Rain_Hours": 228.35,
+      "Overall": 268.77
+    }
+  },
+  "baseline_d": {
+    "name": "Historical Mean by (Day_Type, Hour, Month) on Train+Val",
+    "test_metrics": {
+      "MAE": 272.65,
+      "RMSE": 429.48,
+      "R2": 0.9527,
+      "Accuracy": 88.56,
+      "Within_1_Class": 99.88,
+      "Confusion_Matrix": [
+        [
+          1409,
+          150,
+          4,
+          0
+        ],
+        [
+          40,
+          1358,
+          137,
+          4
+        ],
+        [
+          0,
+          164,
+          2129,
+          147
+        ],
+        [
+          0,
+          0,
+          97,
+          855
+        ]
+      ]
+    },
+    "test_sliced_mae": {
+      "Weekday_AM_Rush (07-08)": 331.89,
+      "Weekday_PM_Rush (16-17)": 362.85,
+      "Weekends": 353.52,
+      "Holidays": 324.06,
+      "Snow_Hours": 627.39,
+      "Rain_Hours": 212.56,
+      "Overall": 272.65
+    }
+  },
+  "forecast_model": {
+    "type": "LightGBM",
+    "feature_count": 40,
+    "features_file": "models/forecast_features.json",
+    "validation_metrics": {
+      "Feature_Set": "Forecast",
+      "Model": "LightGBM",
+      "MAE": 150.53,
+      "RMSE": 234.34,
+      "R2": 0.986,
+      "Accuracy": 93.31,
+      "Within_1_Class": 100.0
+    },
+    "test_metrics": {
+      "MAE": 139.65,
+      "RMSE": 217.38,
+      "R2": 0.9879,
+      "Accuracy": 93.69,
+      "Within_1_Class": 99.98,
+      "Confusion_Matrix": [
+        [
+          1493,
+          70,
+          0,
+          0
+        ],
+        [
+          27,
+          1461,
+          50,
+          1
+        ],
+        [
+          0,
+          93,
+          2241,
+          106
+        ],
+        [
+          0,
+          0,
+          63,
+          889
+        ]
+      ]
+    },
+    "test_sliced_mae": {
+      "Weekday_AM_Rush (07-08)": 228.51,
+      "Weekday_PM_Rush (16-17)": 206.57,
+      "Weekends": 147.95,
+      "Holidays": 151.29,
+      "Snow_Hours": 202.73,
+      "Rain_Hours": 124.9,
+      "Overall": 139.65
+    }
+  },
+  "scenario_model": {
+    "type": "LightGBM",
+    "feature_count": 31,
+    "features_file": "models/scenario_features.json",
+    "validation_metrics": {
+      "Feature_Set": "Scenario",
+      "Model": "LightGBM",
+      "MAE": 242.27,
+      "RMSE": 374.61,
+      "R2": 0.9643,
+      "Accuracy": 89.16,
+      "Within_1_Class": 99.97
+    },
+    "test_metrics": {
+      "MAE": 218.86,
+      "RMSE": 364.56,
+      "R2": 0.9659,
+      "Accuracy": 90.5,
+      "Within_1_Class": 99.92,
+      "Confusion_Matrix": [
+        [
+          1452,
+          108,
+          3,
+          0
+        ],
+        [
+          29,
+          1408,
+          100,
+          2
+        ],
+        [
+          0,
+          149,
+          2164,
+          127
+        ],
+        [
+          0,
+          0,
+          99,
+          853
+        ]
+      ]
+    },
+    "test_sliced_mae": {
+      "Weekday_AM_Rush (07-08)": 327.17,
+      "Weekday_PM_Rush (16-17)": 322.03,
+      "Weekends": 275.01,
+      "Holidays": 357.66,
+      "Snow_Hours": 535.65,
+      "Rain_Hours": 172.44,
+      "Overall": 218.86
+    }
+  }
+}

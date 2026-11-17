@@ -1,0 +1,14 @@
+{
+  "dataset": "UCI Metro Interstate Traffic Volume",
+  "partition": "Training (2012-10-02 to 2016-12-31)",
+  "percentile_25": 1204.0,
+  "percentile_50": 3339.0,
+  "percentile_85": 5493.0,
+  "labels": ["Low", "Moderate", "High", "Severe"],
+  "ranges": {
+    "Low": "traffic_volume < 1204.0",
+    "Moderate": "1204.0 <= traffic_volume < 3339.0",
+    "High": "3339.0 <= traffic_volume < 5493.0",
+    "Severe": "traffic_volume >= 5493.0"
+  }
+}
