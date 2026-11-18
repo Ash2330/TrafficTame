@@ -65,7 +65,7 @@ PRESETS = {
     },
     "Severe Winter Blizzard (AM Peak)": {
         "hour": 8, "weekday": 2, "month": 1, "temp_c": -12.0,
-        "rain_1h": 0.0, "snow_1h": 2.5, "clouds_all": 100, "weather_main": "Snow",
+        "rain_1h": 0.0, "snow_1h": 0.5, "clouds_all": 100, "weather_main": "Snow",
         "is_holiday": 0, "demand_mult": 1.0,
     },
     "Summer Friday Getaway Surge": {

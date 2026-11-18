@@ -189,7 +189,7 @@ with tab1:
             sel_temp = st.slider("Temperature (°C):", -35.0, 40.0, float(default_vals["temp_c"]), step=0.5)
             sel_rain = st.slider("Rainfall (mm/h):", 0.0, 50.0, float(default_vals["rain_1h"]), step=0.5)
         with c_w2:
-            sel_snow = st.slider("Snowfall (mm/h):", 0.0, 10.0, float(default_vals["snow_1h"]), step=0.2)
+            sel_snow = st.slider("Snowfall (mm/h, observed max 0.51 mm):", 0.0, 0.5, min(0.5, float(default_vals["snow_1h"])), step=0.05)
             sel_clouds = st.slider("Cloud Coverage (%):", 0, 100, int(default_vals["clouds_all"]), step=5)
 
         weather_cats = ["Clear", "Clouds", "Rain", "Snow", "Drizzle", "Mist", "Haze", "Fog", "Thunderstorm", "Squall", "Smoke"]
@@ -197,11 +197,10 @@ with tab1:
         sel_weather = st.selectbox("Weather Condition (Macro):", weather_cats, index=sel_weather_idx)
 
         st.markdown(
-            "<div class='flow-note'><b>Snow Response Note</b>: In the training dataset, 99.0% of hours categorized as Snow had <code>snow_1h = 0.0 mm</code> "
-            "(the station recorded the precipitation type without measuring liquid water equivalent). Consequently, the categorical weather selection accounts for ~-7.8% volume change, "
-            "while the snowfall intensity slider contributes an additional -6.2% (-14.0% combined). "
-            "The model's combined snow response (~ -13% to -14%) is somewhat larger than the empirical -9% to -10% volume reduction observed during winter rush hours, "
-            "partly because sub-zero temperatures and snow co-occur in winter commute data.</div>",
+            "<div class='flow-note'><b>Snow Response Note</b>: In the dataset, 99.0% of hours categorized as Snow had <code>snow_1h = 0.0 mm</code>, "
+            "and the maximum observed non-zero value is only 0.51 mm (the slider is capped at 0.5 mm). Holding temperature fixed at -5°C, "
+            "the categorical weather label accounts for -7.8% volume reduction (-441 vph), while the intensity slider (0 to 0.5 mm) adds -6.5% (-368 vph), "
+            "yielding -14.0% combined (-788 vph). The model's combined snow response (-14.0%) is somewhat larger than the empirical -9% to -10% volume reduction observed during winter rush hours.</div>",
             unsafe_allow_html=True,
         )
 
@@ -325,7 +324,7 @@ with tab1:
         with sb_col1:
             sb_weather = st.selectbox("Scenario B Weather:", weather_cats, index=3)  # Snow
         with sb_col2:
-            sb_snow = st.slider("Scenario B Snow (mm/h):", 0.0, 10.0, 1.5, step=0.2)
+            sb_snow = st.slider("Scenario B Snow (mm/h, capped at 0.5 mm):", 0.0, 0.5, 0.5, step=0.05)
         with sb_col3:
             sb_temp = st.slider("Scenario B Temp (°C):", -35.0, 40.0, -8.0, step=0.5)
         with sb_col4:

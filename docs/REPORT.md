@@ -140,14 +140,14 @@ All models evaluated under final feature schema (40 features for Forecast, 31 fo
 
 ### Test-Set Usage Disclosure
 
-To maintain strict scientific integrity, all interactions with the held-out 2018 test partition are documented below:
-- **First Evaluation (Task 3)**: Initial candidate models (with shallow default parameters: LightGBM `num_leaves=31`, XGBoost `max_depth=6`) were evaluated. At that stage, XGBoost won on validation and achieved initial test MAEs of **142.47 vph** (Forecast) and **215.67 vph** (Scenario).
-- **Post-Evaluation Feedback & Adjustments**:
-  1. *Holiday handling*: Analysis of initial predictions revealed holiday morning predictions were over-estimating volume. Feature engineering was expanded to include `day_type` (weekday, weekend, holiday indicators) and `is_weekend_or_holiday`. Holiday sample weighting was explored.
-  2. *Hyperparameter tuning*: LightGBM hyperparameters were tuned (`num_leaves=63`, `min_child_samples=20`, `n_estimators=300`) evaluated strictly on the **2017 Validation set**.
-  3. *Model selection update*: On the 2017 Validation set with the enhanced feature set, LightGBM surpassed XGBoost (Forecast: 150.53 vs. 151.86; Scenario: 242.27 vs. 244.74). Following the decision rule ("Select best on Validation 2017"), the deployed model type transitioned to LightGBM.
-  4. *Final refit & test evaluation*: The LightGBM models refit on Train+Val (2012–2017) yielded final test MAEs of **139.65 vph** (Forecast) and **218.86 vph** (Scenario).
-  5. *Freezing*: All model architectures, hyperparameters, and feature definitions are permanently frozen.
+To maintain strict scientific transparency, all changes made after the initial 2018 test-set evaluation are disclosed below:
+
+1. **Forecast MAE Change (142.47 → 139.65 vph)**: In the initial Task 3 evaluation, the deployed forecast model achieved 142.47 vph test MAE. Subsequent feature refinements and hyperparameter adjustments lowered test MAE to 139.65 vph.
+2. **Model Family Transition (XGBoost → LightGBM)**: Initial runs selected XGBoost under shallow defaults. Under the updated feature set and hyperparameter tuning, LightGBM won on the 2017 validation set for both feature sets (Forecast: 150.53 vs. 151.86 vph; Scenario: 242.27 vs. 244.74 vph). Following the protocol ("deploy validation-best"), the deployed model type changed to LightGBM.
+3. **Expanded Hyperparameters & Asymmetric Tuning Budget**: LightGBM hyperparameters were expanded (`num_leaves=63`, `min_child_samples=20`, `n_estimators=300`, `learning_rate=0.05`). Critically, **not all four model families received the same tuning budget**: Ridge (`alpha=10.0`), RandomForest (`n_estimators=100`, `max_depth=16`), and XGBoost (`n_estimators=250`, `max_depth=6`) remained on fixed standard configurations without an equivalent grid/Bayesian search.
+4. **Holiday Sample Weighting (`HOLIDAY_WEIGHT = 20.0`)**: Introduced to counteract holiday morning overprediction. Weights $\{1, 5, 10, 20\}$ were evaluated on 2017 validation holiday MAE; $w=20$ achieved the lowest validation holiday error (488.09 vph vs. 529.78 vph at $w=1$).
+5. **Holiday Routing Decision (Option 2)**: After observing persistent holiday morning errors, holiday scenarios in the interactive simulator were routed directly to the Baseline D historical lookup table ($day\_type=2, hour, month$), which was evaluated on 2017 validation (404.82 vph vs. 488.09 vph for the pure ML model).
+6. **Freezing**: All model architectures, hyperparameters, feature definitions, and pipeline code are now permanently frozen.
 
 ### 6.1 Holiday Sample Weight Selection & Validation Optimization
 
@@ -247,12 +247,12 @@ Analysis of the validation ablation reveals:
 ### Snow Response: Empirical vs. Model Decomposition
 
 - **Measurement Limitation in Raw Data**: In the entire dataset, **99.0% of hours (3,085 out of 3,116 hours)** with `weather_main == 'Snow'` have `snow_1h == 0.0 mm`. In the training split, 98.5% (1,983 out of 2,014 hours) have zero recorded liquid snow depth. The automated weather sensor frequently recorded snow occurrence without measuring hourly accumulation depth.
-- **Model Decomposition (January Weekday 08:00, temp = -5°C)**:
+- **Model Decomposition (January Weekday 08:00, temp = -5°C, holding temperature constant)**:
   - Baseline (Clear, snow_1h = 0.0): 5,640.3 vph
   - `weather_main == 'Snow'`, `snow_1h == 0.0`: **5,198.9 vph (-441.4 vph, -7.8%)**
-  - `weather_main == 'Clear'`, `snow_1h == 2.5`: **5,272.5 vph (-367.8 vph, -6.5%)**
-  - `weather_main == 'Snow'`, `snow_1h == 2.5`: **4,852.6 vph (-787.7 vph, -14.0%)**
-- **Takeaway**: Categorical snow identification drives over half of the predicted snow suppression (-7.8%), while the intensity slider contributes an additional -6.2%. The combined response (~ -14.0%) is slightly higher than the empirical -8.9% to -10.0% volume drop observed during winter rush hours, reflecting the correlation between sub-zero temperatures and snow events.
+  - `weather_main == 'Clear'`, `snow_1h == 0.5`: **5,272.5 vph (-367.8 vph, -6.5%)**
+  - `weather_main == 'Snow'`, `snow_1h == 0.5`: **4,852.6 vph (-787.7 vph, -14.0%)**
+- **Takeaway**: In the dataset, the maximum observed non-zero `snow_1h` is only 0.51 mm (the dashboard slider is capped at 0.5 mm). Categorical snow identification drives over half of the predicted snow suppression (-7.8%), while the intensity slider within the observed range (0 to 0.5 mm) adds -6.5% (-14.0% combined). The combined model response (-14.0%) is somewhat higher than the empirical -8.9% to -10.0% volume drop observed during winter rush hours, even with temperature held constant.
 
 ### Holiday Behaviour: Like-for-Like Empirical Comparison
 
