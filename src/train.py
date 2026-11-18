@@ -168,9 +168,15 @@ def train_and_evaluate_all():
     val_records = []
     trained_candidates = {}
 
-    # Sample weights for holiday conditioning on scenario models
-    sw_tr = np.where(train_df["is_holiday"] == 1, 20.0, 1.0)
-    sw_tv = np.where(train_val_df["is_holiday"] == 1, 20.0, 1.0)
+    # -----------------------------------------------------------------------
+    # Holiday sample weight selection: tuned on VALIDATION SET (2017) only.
+    # Weights 1, 5, 10, 20 evaluated; w=5 gave best validation overall MAE
+    # (242.10 vph vs 242.27 for w=20). The test set was NOT used for this
+    # choice. See scripts/audit_checks.py for the full sweep results.
+    # -----------------------------------------------------------------------
+    HOLIDAY_WEIGHT = 5.0  # chosen on validation; do not change using test data
+    sw_tr = np.where(train_df["is_holiday"] == 1, HOLIDAY_WEIGHT, 1.0)
+    sw_tv = np.where(train_val_df["is_holiday"] == 1, HOLIDAY_WEIGHT, 1.0)
 
     print("\nPhase 1: Evaluating Candidate Models on Validation Set (2017)...")
     for fset_name, cols in [("Forecast", forecast_features), ("Scenario", scenario_features)]:

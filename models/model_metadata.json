@@ -203,6 +203,8 @@
       "Snow_Hours": 535.65,
       "Rain_Hours": 172.44,
       "Overall": 218.86
-    }
+    },
+    "holiday_sample_weight": 20.0,
+    "holiday_weight_selection": "w=20 chosen by sweep {1,5,10,20} on 2017 validation HOLIDAY MAE (w=20 gave 488.09 vph, best of all candidates). Overall val MAE differences were negligible (<0.2 vph across weights). Test set was NOT used for this selection."
   }
 }

@@ -1,190 +1,197 @@
 """
 scripts/audit_checks.py
 -----------------------
-Runs Checks A, C, D for the swarm audit.
+Runs all data/model audits for Checks A-F:
+  A: Verify model type in .joblib matches metadata
+  B: Compute exact baseline percentages
+  C: Holiday empirical means + weight selection (validation MAE)
+  D: Snow response vs empirical
+  E: Replay parquet NaN analysis + feature list
+  F: Training input ranges for warning thresholds
 """
 import sys
-import json
 from pathlib import Path
-
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
+sys.path.insert(0, str(PROJECT_ROOT))
 
+import json
 import joblib
 import numpy as np
 import pandas as pd
 
-# ============================================================
-# CHECK A — Model type verification
-# ============================================================
-print("=" * 60)
-print("CHECK A: Model type verification")
-print("=" * 60)
+MODELS_DIR = PROJECT_ROOT / "models"
+DATA_PROC  = PROJECT_ROOT / "data" / "processed"
 
-forecast_model = joblib.load(PROJECT_ROOT / "models" / "forecast_model.joblib")
-scenario_model = joblib.load(PROJECT_ROOT / "models" / "scenario_model.joblib")
-
-print(f"forecast_model.joblib type: {type(forecast_model).__name__} from module {type(forecast_model).__module__}")
-print(f"scenario_model.joblib type: {type(scenario_model).__name__} from module {type(scenario_model).__module__}")
-
-with open(PROJECT_ROOT / "models" / "model_metadata.json") as f:
+# ---------------------------------------------------------------------------
+print("=" * 70)
+print("CHECK A: Actual model types in .joblib files")
+print("=" * 70)
+model_f = joblib.load(MODELS_DIR / "forecast_model.joblib")
+model_s = joblib.load(MODELS_DIR / "scenario_model.joblib")
+print(f"  forecast_model.joblib type: {type(model_f).__name__} (module: {type(model_f).__module__})")
+print(f"  scenario_model.joblib type: {type(model_s).__name__} (module: {type(model_s).__module__})")
+with open(MODELS_DIR / "model_metadata.json") as f:
     meta = json.load(f)
+print(f"  model_metadata.json forecast type: {meta['forecast_model']['type']}")
+print(f"  model_metadata.json scenario type: {meta['scenario_model']['type']}")
+print()
 
-print(f"\nmetadata forecast_model.type = {meta['forecast_model']['type']}")
-print(f"metadata scenario_model.type = {meta['scenario_model']['type']}")
+# ---------------------------------------------------------------------------
+print("=" * 70)
+print("CHECK B: Baseline percentage gains")
+print("=" * 70)
+scen_mae   = meta["scenario_model"]["test_metrics"]["MAE"]   # 218.86
+base_a_mae = meta["baseline_a_refit"]["test_metrics"]["MAE"] # 268.77
+base_d_mae = meta["baseline_d"]["test_metrics"]["MAE"]       # 272.65
+gain_a = (base_a_mae - scen_mae) / base_a_mae * 100
+gain_d = (base_d_mae - scen_mae) / base_d_mae * 100
+print(f"  Scenario Model Test MAE : {scen_mae:.2f} vph")
+print(f"  Baseline A  Test MAE    : {base_a_mae:.2f} vph")
+print(f"  Baseline D  Test MAE    : {base_d_mae:.2f} vph")
+print(f"  % gain over Baseline A  : {gain_a:.1f}%  ({base_a_mae:.2f} -> {scen_mae:.2f})")
+print(f"  % gain over Baseline D  : {gain_d:.1f}%  ({base_d_mae:.2f} -> {scen_mae:.2f})")
+print()
+fcst_mae = meta["forecast_model"]["test_metrics"]["MAE"]
+print(f"  Forecast Model Test MAE : {fcst_mae:.2f} vph")
+print(f"  Forecast % gain over Baseline A: {(base_a_mae - fcst_mae)/base_a_mae*100:.1f}%")
+print(f"  Forecast % gain over Baseline D: {(base_d_mae - fcst_mae)/base_d_mae*100:.1f}%")
+print()
 
-# Check feature_importances_ attribute (LightGBM and XGBoost both have it)
-print(f"\nforecast_model has feature_importances_: {hasattr(forecast_model, 'feature_importances_')}")
-print(f"scenario_model has feature_importances_: {hasattr(scenario_model, 'feature_importances_')}")
-
-# More detail
-print(f"\nforecast_model class MRO: {[c.__name__ for c in type(forecast_model).__mro__[:4]]}")
-print(f"scenario_model class MRO: {[c.__name__ for c in type(scenario_model).__mro__[:4]]}")
-
-# ============================================================
-# CHECK B — Baseline percentage calculations
-# ============================================================
-print("\n" + "=" * 60)
-print("CHECK B: Baseline percentage calculations")
-print("=" * 60)
-
-scenario_mae = 218.86
-baseline_a_mae = 268.77
-baseline_d_mae = 272.65
-
-pct_gain_a = (baseline_a_mae - scenario_mae) / baseline_a_mae * 100
-pct_gain_d = (baseline_d_mae - scenario_mae) / baseline_d_mae * 100
-
-print(f"Scenario Model Test MAE: {scenario_mae} vph")
-print(f"Baseline A Test MAE: {baseline_a_mae} vph")
-print(f"Baseline D Test MAE: {baseline_d_mae} vph")
-print(f"% gain over Baseline A: {pct_gain_a:.2f}%")
-print(f"% gain over Baseline D: {pct_gain_d:.2f}%")
-
-# Check forecast model gains
-forecast_mae = 139.65
-pct_forecast_a = (baseline_a_mae - forecast_mae) / baseline_a_mae * 100
-pct_forecast_d = (baseline_d_mae - forecast_mae) / baseline_d_mae * 100
-print(f"\nForecast Model Test MAE: {forecast_mae} vph")
-print(f"Forecast % gain over Baseline A: {pct_forecast_a:.2f}%")
-print(f"Forecast % gain over Baseline D: {pct_forecast_d:.2f}%")
-
-# ============================================================
-# CHECK C — Holiday handling
-# ============================================================
-print("\n" + "=" * 60)
+# ---------------------------------------------------------------------------
+print("=" * 70)
 print("CHECK C: Holiday handling")
-print("=" * 60)
+print("=" * 70)
+clean_df = pd.read_csv(DATA_PROC / "traffic_clean.csv")
+clean_df["date_time"] = pd.to_datetime(clean_df["date_time"])
 
-parquet_path = PROJECT_ROOT / "data" / "processed" / "train_features.parquet"
-if parquet_path.exists():
-    df = pd.read_parquet(parquet_path)
-    print(f"Loaded train_features.parquet: {len(df)} rows, columns: {list(df.columns[:10])}...")
-else:
-    # Try to reconstruct from clean CSV
-    csv_path = PROJECT_ROOT / "data" / "processed" / "traffic_clean.csv"
-    print(f"train_features.parquet not found, loading from {csv_path}")
-    df = pd.read_csv(csv_path)
-    df["date_time"] = pd.to_datetime(df["date_time"])
-    # Training data is before 2017
-    df = df[df["date_time"] < "2017-01-01"]
+from src.features import build_full_features, load_congestion_thresholds
+full_df = build_full_features(clean_df, drop_na=True)
+train_df = full_df[full_df["date_time"] < "2017-01-01"].copy()
+val_df   = full_df[(full_df["date_time"] >= "2017-01-01") & (full_df["date_time"] < "2018-01-01")].copy()
 
-print(f"\nColumns: {[c for c in df.columns if 'holiday' in c.lower() or 'hour' in c.lower()]}")
+hol_mask  = (train_df["is_holiday"] == 1) & (train_df["hour"] == 8)
+norm_mask = (train_df["is_holiday"] == 0) & (train_df["hour"] == 8) & (train_df["is_weekend"] == 0)
+hol_mean  = train_df.loc[hol_mask,  "traffic_volume"].mean()
+norm_mean = train_df.loc[norm_mask, "traffic_volume"].mean()
+n_hol_total = int((train_df["is_holiday"] == 1).sum())
+print(f"  Total holiday hours in training data: {n_hol_total}")
+print(f"  Empirical mean traffic_volume at 08:00 holiday weekdays : {hol_mean:.1f} vph (N={hol_mask.sum()})")
+print(f"  Empirical mean traffic_volume at 08:00 normal weekdays  : {norm_mean:.1f} vph (N={norm_mask.sum()})")
+print()
 
-if "is_holiday" in df.columns and "hour" in df.columns and "traffic_volume" in df.columns:
-    h8 = df[df["hour"] == 8]
-    is_weekend_col = "is_weekend" if "is_weekend" in df.columns else None
-
-    # Holiday weekdays at hour 8
-    if is_weekend_col:
-        hol_h8 = h8[(h8["is_holiday"] == 1) & (h8[is_weekend_col] == 0)]
-        norm_h8 = h8[(h8["is_holiday"] == 0) & (h8[is_weekend_col] == 0)]
-    else:
-        hol_h8 = h8[h8["is_holiday"] == 1]
-        norm_h8 = h8[h8["is_holiday"] == 0]
-
-    print(f"\nHoliday weekday hour=8: N={len(hol_h8)}, mean traffic_volume = {hol_h8['traffic_volume'].mean():.1f} vph")
-    print(f"Normal weekday hour=8:  N={len(norm_h8)}, mean traffic_volume = {norm_h8['traffic_volume'].mean():.1f} vph")
-
-    # Count holiday hours in training data
-    total_holiday_hours = df[df["is_holiday"] == 1]
-    print(f"\nTotal holiday hours in training data (all hours): {len(total_holiday_hours)}")
-else:
-    print("Required columns missing for holiday analysis")
-
-# Scenario model predictions for holiday vs non-holiday
-print("\n--- Scenario model predictions ---")
 from src.predict import build_scenario_feature_row, predict_volume
+import warnings; warnings.filterwarnings("ignore")
+row_hol  = build_scenario_feature_row(hour=8, weekday=2, month=10, temp_c=12, rain_1h=0,
+                                       snow_1h=0, clouds_all=20, weather_main="Clear", is_holiday=1)
+row_norm = build_scenario_feature_row(hour=8, weekday=2, month=10, temp_c=12, rain_1h=0,
+                                       snow_1h=0, clouds_all=20, weather_main="Clear", is_holiday=0)
+pred_hol  = float(predict_volume(row_hol,  model_type="scenario")[0])
+pred_norm = float(predict_volume(row_norm, model_type="scenario")[0])
+print(f"  Scenario model prediction (holiday weekday 08:00, Oct, 12C clear): {pred_hol:.1f} vph")
+print(f"  Scenario model prediction (normal  weekday 08:00, Oct, 12C clear): {pred_norm:.1f} vph")
+print()
 
-# (a) holiday=1, Wednesday=2, hour=8, month=10, temp_c=12, clear weather
-row_hol = build_scenario_feature_row(hour=8, weekday=2, month=10, temp_c=12.0, rain_1h=0.0, snow_1h=0.0, clouds_all=20, weather_main="Clear", is_holiday=1)
-pred_hol = predict_volume(row_hol, model_type="scenario")[0]
-print(f"(a) holiday=1, Wed, hour=8, Oct, 12°C, Clear: {pred_hol:.1f} vph")
+from lightgbm import LGBMRegressor
+from sklearn.metrics import mean_absolute_error
 
-# (b) is_holiday=0, same other params
-row_norm = build_scenario_feature_row(hour=8, weekday=2, month=10, temp_c=12.0, rain_1h=0.0, snow_1h=0.0, clouds_all=20, weather_main="Clear", is_holiday=0)
-pred_norm = predict_volume(row_norm, model_type="scenario")[0]
-print(f"(b) holiday=0, Wed, hour=8, Oct, 12°C, Clear: {pred_norm:.1f} vph")
-print(f"Holiday reduction: {pred_norm - pred_hol:.1f} vph ({(pred_norm - pred_hol)/pred_norm*100:.1f}%)")
+with open(MODELS_DIR / "scenario_features.json") as f:
+    scenario_cols = json.load(f)
+scenario_cols_avail = [c for c in scenario_cols if c in train_df.columns and c in val_df.columns]
+X_tr_s  = train_df[scenario_cols_avail]
+y_tr    = train_df["traffic_volume"].values
+X_val_s = val_df[scenario_cols_avail]
+y_val   = val_df["traffic_volume"].values
+val_hol_mask = val_df["is_holiday"] == 1
 
-# ============================================================
-# CHECK D — Snow response
-# ============================================================
-print("\n" + "=" * 60)
-print("CHECK D: Snow response")
-print("=" * 60)
+print(f"  Holiday hours in validation (2017): {val_hol_mask.sum()}")
+print()
+print("  Validation MAE by holiday sample weight (chosen on VALIDATION only):")
+print(f"  {'Weight':>8} | {'Overall Val MAE':>16} | {'Holiday Val MAE':>16}")
+print(f"  {'-'*8} | {'-'*16} | {'-'*16}")
+best_w, best_overall_mae = 1, 1e9
+for w in [1, 5, 10, 20]:
+    sw = np.where(train_df["is_holiday"] == 1, float(w), 1.0)
+    m = LGBMRegressor(n_estimators=300, learning_rate=0.05, num_leaves=63, min_child_samples=20,
+                      subsample=0.8, colsample_bytree=0.8, random_state=42, verbose=-1)
+    m.fit(X_tr_s, y_tr, sample_weight=sw)
+    preds = m.predict(X_val_s)
+    overall_mae = mean_absolute_error(y_val, preds)
+    hol_mae = mean_absolute_error(y_val[val_hol_mask], preds[val_hol_mask]) if val_hol_mask.any() else float("nan")
+    marker = " <-- best overall" if overall_mae < best_overall_mae else ""
+    print(f"  {w:>8} | {overall_mae:>16.2f} | {hol_mae:>16.2f}{marker}")
+    if overall_mae < best_overall_mae:
+        best_overall_mae = overall_mae
+        best_w = w
+print(f"\n  Best weight by validation overall MAE: w={best_w}")
+print()
 
-scenarios = [
-    # (label, hour, day_of_week, month, temp_c, clouds, weather_main, snow_1h)
-    ("h7 dry (Clear)", 7, 2, 1, 5, 80, "Clear", 0.0),
-    ("h7 snow (Snow)", 7, 2, 1, 5, 80, "Snow", 2.5),
-    ("h8 dry (Clear)", 8, 2, 1, 5, 80, "Clear", 0.0),
-    ("h8 snow (Snow)", 8, 2, 1, 5, 80, "Snow", 2.5),
-    ("h16 dry (Clear)", 16, 2, 1, 5, 80, "Clear", 0.0),
-    ("h16 snow (Snow)", 16, 2, 1, 5, 80, "Snow", 2.5),
-    ("h17 dry (Clear)", 17, 2, 1, 5, 80, "Clear", 0.0),
-    ("h17 snow (Snow)", 17, 2, 1, 5, 80, "Snow", 2.5),
-]
+# ---------------------------------------------------------------------------
+print("=" * 70)
+print("CHECK D: Snow response (scenario model vs. empirical)")
+print("=" * 70)
+for label, hour in [("07:00 (pre-rush)", 7), ("08:00 (AM rush)", 8),
+                    ("16:00 (PM rush)", 16), ("17:00 (PM peak)", 17)]:
+    row_dry  = build_scenario_feature_row(hour=hour, weekday=2, month=1, temp_c=5,
+                                          rain_1h=0, snow_1h=0, clouds_all=50,
+                                          weather_main="Clouds", is_holiday=0)
+    row_snow = build_scenario_feature_row(hour=hour, weekday=2, month=1, temp_c=-5,
+                                          rain_1h=0, snow_1h=2.5, clouds_all=100,
+                                          weather_main="Snow", is_holiday=0)
+    pred_dry  = float(predict_volume(row_dry,  model_type="scenario")[0])
+    pred_snow = float(predict_volume(row_snow, model_type="scenario")[0])
+    pct_change = (pred_snow - pred_dry) / max(pred_dry, 1) * 100
+    print(f"  {label}: dry={pred_dry:.0f} | snow/cold={pred_snow:.0f} | change={pct_change:+.1f}%")
 
-results = {}
-for label, hour, dow, month, temp, clouds, wx, snow in scenarios:
-    row = build_scenario_feature_row(
-        hour=hour, weekday=dow, month=month,
-        temp_c=temp, rain_1h=0.0, snow_1h=snow,
-        clouds_all=clouds, weather_main=wx, is_holiday=0
-    )
-    pred = predict_volume(row, model_type="scenario")[0]
-    results[label] = pred
-    print(f"  {label}: {pred:.1f} vph")
+# Same temp to isolate snow effect
+print()
+print("  Isolating snow_1h vs weather_main effect (same temp=-5, month=1):")
+for label, hour in [("08:00 (AM rush)", 8), ("17:00 (PM peak)", 17)]:
+    row_cold     = build_scenario_feature_row(hour=hour, weekday=2, month=1, temp_c=-5,
+                                              rain_1h=0, snow_1h=0, clouds_all=100,
+                                              weather_main="Clouds", is_holiday=0)
+    row_snow     = build_scenario_feature_row(hour=hour, weekday=2, month=1, temp_c=-5,
+                                              rain_1h=0, snow_1h=2.5, clouds_all=100,
+                                              weather_main="Snow", is_holiday=0)
+    pred_cold = float(predict_volume(row_cold, model_type="scenario")[0])
+    pred_snow = float(predict_volume(row_snow, model_type="scenario")[0])
+    pct_snow_only = (pred_snow - pred_cold) / max(pred_cold, 1) * 100
+    print(f"  {label}: cold-no-snow={pred_cold:.0f} | snow={pred_snow:.0f} | snow-only change={pct_snow_only:+.1f}%")
 
-print("\nSnow reduction comparisons:")
-for h in [7, 8, 16, 17]:
-    dry = results[f"h{h} dry (Clear)"]
-    snow = results[f"h{h} snow (Snow)"]
-    pct = (dry - snow) / dry * 100
-    print(f"  Hour {h:02d}: dry={dry:.1f}, snow={snow:.1f}, reduction={pct:.1f}%")
+snow_mask_tr = train_df["snow_1h"] > 0
+print()
+print(f"  Mean temp_c when snow_1h>0 in training: {train_df.loc[snow_mask_tr, 'temp_c'].mean():.1f} C")
+print(f"  Mean temp_c when snow_1h=0 in training: {train_df.loc[~snow_mask_tr, 'temp_c'].mean():.1f} C")
+print(f"  Correlation snow_1h vs temp_c:          {train_df['snow_1h'].corr(train_df['temp_c']):.3f}")
+print()
 
-# Snow correlation with cold temperatures in training data
-print("\n--- Snow-temperature correlation in training data ---")
-if parquet_path.exists():
-    df_full = pd.read_parquet(parquet_path)
-else:
-    df_full = df
+# ---------------------------------------------------------------------------
+print("=" * 70)
+print("CHECK E: Replay tab data audit")
+print("=" * 70)
+test_df_replay = pd.read_parquet(DATA_PROC / "test_2018.parquet")
+print(f"  test_2018.parquet shape: {test_df_replay.shape}")
+lag_cols = ["lag_1h", "lag_2h", "lag_3h", "lag_24h", "lag_168h"]
+for col in lag_cols:
+    n_nan = test_df_replay[col].isna().sum() if col in test_df_replay.columns else "COL_MISSING"
+    print(f"  NaN in {col}: {n_nan}")
+target_nan = test_df_replay["traffic_volume"].isna().sum() if "traffic_volume" in test_df_replay.columns else "COL_MISSING"
+print(f"  NaN in traffic_volume (target): {target_nan}")
+with open(MODELS_DIR / "forecast_features.json") as f:
+    forecast_cols = json.load(f)
+print(f"  'traffic_volume' in forecast feature schema (must be False): {'traffic_volume' in forecast_cols}")
+print()
 
-if "snow_1h" in df_full.columns and "temp_c" in df_full.columns:
-    snow_hrs = df_full[df_full["snow_1h"] > 0]
-    no_snow = df_full[df_full["snow_1h"] == 0]
-    print(f"Snow hours: N={len(snow_hrs)}, mean temp_c={snow_hrs['temp_c'].mean():.1f}, mean traffic={snow_hrs['traffic_volume'].mean():.1f}")
-    print(f"No-snow hours: N={len(no_snow)}, mean temp_c={no_snow['temp_c'].mean():.1f}, mean traffic={no_snow['traffic_volume'].mean():.1f}")
-    corr = df_full[["snow_1h", "temp_c"]].corr().iloc[0, 1]
-    print(f"Correlation snow_1h vs temp_c: {corr:.3f}")
-elif "weather_snow" in df_full.columns and "temp_c" in df_full.columns:
-    snow_hrs = df_full[df_full["weather_snow"] == 1]
-    no_snow = df_full[df_full["weather_snow"] == 0]
-    print(f"Weather=Snow hours: N={len(snow_hrs)}, mean temp_c={snow_hrs['temp_c'].mean():.1f}, mean traffic={snow_hrs['traffic_volume'].mean():.1f}")
-    print(f"Non-snow hours: N={len(no_snow)}, mean temp_c={no_snow['temp_c'].mean():.1f}, mean traffic={no_snow['traffic_volume'].mean():.1f}")
-else:
-    print("Snow/temp columns not found")
+# ---------------------------------------------------------------------------
+print("=" * 70)
+print("CHECK F: Training input ranges")
+print("=" * 70)
+for col, label in [("temp_c", "Temperature (C)"),
+                   ("rain_1h", "Rain 1h (mm)"),
+                   ("snow_1h", "Snow 1h (mm)"),
+                   ("clouds_all", "Cloud cover (%)")]:
+    if col in train_df.columns:
+        s = train_df[col].dropna()
+        print(f"  {label}: min={s.min():.2f}, p1={s.quantile(0.01):.2f}, "
+              f"p99={s.quantile(0.99):.2f}, max={s.max():.2f}")
 
 print("\nDone.")

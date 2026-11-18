@@ -210,6 +210,15 @@ with tab1:
             unsafe_allow_html=True,
         )
 
+    # Training data input ranges (1st/99th percentile from 2012-2016 training partition)
+    # Source: scripts/audit_checks.py Check F
+    TRAINING_RANGES = {
+        "temp_c":    {"p1": -23.41, "p99": 29.52, "unit": "°C"},
+        "rain_1h":   {"p1": 0.00,   "p99": 2.03,  "unit": "mm/h"},
+        "snow_1h":   {"p1": 0.00,   "p99": 0.00,  "unit": "mm/h"},   # p99=0 means virtually all training snow=0
+        "clouds_all":{"p1": 0.00,   "p99": 92.0,  "unit": "%"},
+    }
+
     # Compute Scenario Prediction
     pred = get_scenario_prediction(
         hour=sel_hour,
@@ -223,6 +232,25 @@ with tab1:
         is_holiday=int(sel_holiday),
         demand_mult=sel_demand,
     )
+
+    # Out-of-training-range warnings
+    tr = TRAINING_RANGES
+    if sel_temp < tr["temp_c"]["p1"] or sel_temp > tr["temp_c"]["p99"]:
+        st.warning(
+            f"⚠️ Temperature {sel_temp:.1f}°C is outside the training data range "
+            f"({tr['temp_c']['p1']:.1f}–{tr['temp_c']['p99']:.1f}°C). "
+            "Predictions in this region are extrapolations and may be less reliable."
+        )
+    if sel_rain > tr["rain_1h"]["p99"]:
+        st.warning(
+            f"⚠️ Rainfall {sel_rain:.1f} mm/h exceeds the training data 99th percentile "
+            f"({tr['rain_1h']['p99']:.2f} mm/h). Predictions may extrapolate beyond learned patterns."
+        )
+    if sel_snow > 0.51:  # max snow in training = 0.51 mm/h
+        st.warning(
+            f"⚠️ Snowfall {sel_snow:.1f} mm/h exceeds the training data maximum (0.51 mm/h). "
+            "The model has never seen snowfall this heavy — predictions are unreliable."
+        )
 
     # Top KPI Metrics Display
     kpi1, kpi2, kpi3, kpi4 = st.columns(4)
@@ -506,20 +534,37 @@ with tab3:
     # Feature Importance & Confusion Matrix
     c_fi, c_cm = st.columns([1, 1])
     with c_fi:
-        st.markdown("#### 3. Top Feature Importances (Scenario Model)")
-        model_s = res["model_s"]
-        s_cols = res["s_cols"]
-        fi_s = pd.Series(model_s.feature_importances_, index=s_cols).sort_values(ascending=False).head(10)
-        fig_fi = px.bar(
-            x=fi_s.values,
-            y=fi_s.index,
-            orientation="h",
-            labels={"x": "Importance (Split Gain)", "y": "Feature"},
-            color=fi_s.values,
-            color_continuous_scale="Blues",
-        )
-        fig_fi.update_layout(yaxis=dict(autorange="reversed"), height=330, margin=dict(l=20, r=20, t=20, b=20), template="plotly_dark")
-        st.plotly_chart(fig_fi, use_container_width=True)
+        # Show importances for BOTH deployed models
+        fi_tab_f, fi_tab_s = st.tabs([
+            f"Forecast Model ({metadata['forecast_model']['type']})",
+            f"Scenario Model ({metadata['scenario_model']['type']})",
+        ])
+        with fi_tab_f:
+            st.markdown("#### 3a. Top Feature Importances — Forecast Model (LightGBM)")
+            model_f_obj = res["model_f"]
+            f_cols = res["f_cols"]
+            fi_f = pd.Series(model_f_obj.feature_importances_, index=f_cols).sort_values(ascending=False).head(10)
+            fig_fi_f = px.bar(
+                x=fi_f.values, y=fi_f.index, orientation="h",
+                labels={"x": "Importance (Split Gain)", "y": "Feature"},
+                color=fi_f.values, color_continuous_scale="Greens",
+            )
+            fig_fi_f.update_layout(yaxis=dict(autorange="reversed"), height=330,
+                                   margin=dict(l=20, r=20, t=20, b=20), template="plotly_dark")
+            st.plotly_chart(fig_fi_f, use_container_width=True)
+        with fi_tab_s:
+            st.markdown("#### 3b. Top Feature Importances — Scenario Model (LightGBM)")
+            model_s = res["model_s"]
+            s_cols = res["s_cols"]
+            fi_s = pd.Series(model_s.feature_importances_, index=s_cols).sort_values(ascending=False).head(10)
+            fig_fi_s = px.bar(
+                x=fi_s.values, y=fi_s.index, orientation="h",
+                labels={"x": "Importance (Split Gain)", "y": "Feature"},
+                color=fi_s.values, color_continuous_scale="Blues",
+            )
+            fig_fi_s.update_layout(yaxis=dict(autorange="reversed"), height=330,
+                                   margin=dict(l=20, r=20, t=20, b=20), template="plotly_dark")
+            st.plotly_chart(fig_fi_s, use_container_width=True)
 
     with c_cm:
         st.markdown("#### 4. Congestion Confusion Matrix (Forecast Model)")
