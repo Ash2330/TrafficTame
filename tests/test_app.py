@@ -207,59 +207,63 @@ def test_replay_no_target_leakage():
 
 def test_smoothness_no_wild_jumps():
     """
-    Check F: Predictions should not jump wildly (>1000 vph) between adjacent
-    steps in a parameter sweep over temperature, clouds, and rain.
-    
-    Flags any consecutive pair with |delta| > 1000 vph as 'wild'.
-    The test fails only if any single step jump exceeds 1500 vph.
+    Check E / F: Tightened parameter-sweep smoothness test relative to step size.
+    Verifies that model predictions respond smoothly without wild step jumps:
+      - Temperature: step size = 5°C (range -30 to 40°C), limit = 400 vph per step (80 vph/°C).
+        Deployed LightGBM max observed jump: 294 vph (-25°C -> -20°C).
+      - Cloud Coverage: step size = 10% (range 0 to 100%), limit = 150 vph per step (15 vph/%).
+        Deployed LightGBM max observed jump: 95 vph.
+      - Rainfall: step size = 1 mm/h (range 0 to 10 mm/h), limit = 400 vph per step (400 vph/(mm/h)).
+        Deployed LightGBM max observed jump: 318 vph.
     """
-    WILD_THRESHOLD = 1500.0   # vph — test fails only if truly egregious
-    FLAG_THRESHOLD = 1000.0   # vph — reported but not a test failure
-
     base_kwargs = dict(weekday=2, month=6, hour=12, rain_1h=0.0,
                        snow_1h=0.0, clouds_all=20, weather_main="Clear",
                        is_holiday=0, demand_mult=1.0)
 
-    # Sweep 1: temperature -30 to 40 step 5
+    # 1. Temperature Sweep: step size = 5°C, max allowable jump = 400 vph
+    TEMP_STEP = 5
+    TEMP_MAX_JUMP = 400.0
     temp_preds = []
-    for t in range(-30, 45, 5):
+    for t in range(-30, 45, TEMP_STEP):
         r = get_scenario_prediction(temp_c=float(t), **base_kwargs)
         temp_preds.append((t, r["volume"]))
 
-    # Sweep 2: clouds 0 to 100 step 10
+    for i in range(1, len(temp_preds)):
+        delta = abs(temp_preds[i][1] - temp_preds[i-1][1])
+        assert delta <= TEMP_MAX_JUMP, (
+            f"Temperature jump exceeded {TEMP_MAX_JUMP} vph: step {temp_preds[i-1][0]}°C -> "
+            f"{temp_preds[i][0]}°C changed volume by {delta:.1f} vph"
+        )
+
+    # 2. Cloud Coverage Sweep: step size = 10%, max allowable jump = 150 vph
+    CLOUD_STEP = 10
+    CLOUD_MAX_JUMP = 150.0
     cloud_base = {**base_kwargs, "temp_c": 15.0}
     cloud_preds = []
-    for c in range(0, 101, 10):
+    for c in range(0, 101, CLOUD_STEP):
         r = get_scenario_prediction(clouds_all=c, **{k: v for k, v in cloud_base.items() if k != "clouds_all"})
         cloud_preds.append((c, r["volume"]))
 
-    # Sweep 3: rain 0 to 10 step 1
+    for i in range(1, len(cloud_preds)):
+        delta = abs(cloud_preds[i][1] - cloud_preds[i-1][1])
+        assert delta <= CLOUD_MAX_JUMP, (
+            f"Cloud cover jump exceeded {CLOUD_MAX_JUMP} vph: step {cloud_preds[i-1][0]}% -> "
+            f"{cloud_preds[i][0]}% changed volume by {delta:.1f} vph"
+        )
+
+    # 3. Rainfall Sweep: step size = 1 mm/h, max allowable jump = 400 vph
+    RAIN_STEP = 1
+    RAIN_MAX_JUMP = 400.0
     rain_base = {**base_kwargs, "temp_c": 15.0, "weather_main": "Rain"}
     rain_preds = []
-    for rain in range(0, 11):
+    for rain in range(0, 11, RAIN_STEP):
         r = get_scenario_prediction(rain_1h=float(rain), **{k: v for k, v in rain_base.items() if k != "rain_1h"})
         rain_preds.append((rain, r["volume"]))
 
-    wild_jumps = []
-    for sweep_name, preds in [("temp", temp_preds), ("clouds", cloud_preds), ("rain", rain_preds)]:
-        for i in range(1, len(preds)):
-            delta = abs(preds[i][1] - preds[i-1][1])
-            if delta > FLAG_THRESHOLD:
-                wild_jumps.append(
-                    f"{sweep_name}: step {preds[i-1][0]}->{preds[i][0]}: "
-                    f"{preds[i-1][1]:.0f}->{preds[i][1]:.0f} vph (Δ={delta:.0f})"
-                )
-
-    # Report all flagged jumps (informational)
-    if wild_jumps:
-        print(f"\nFlagged jumps >={FLAG_THRESHOLD:.0f} vph:")
-        for j in wild_jumps:
-            print(f"  {j}")
-
-    # Hard fail only on truly egregious jumps
-    egregious = [j for j in wild_jumps if float(j.split("Δ=")[1].rstrip(")")) > WILD_THRESHOLD]
-    assert not egregious, (
-        f"Wild prediction jumps >{WILD_THRESHOLD:.0f} vph detected:\n" +
-        "\n".join(egregious)
-    )
+    for i in range(1, len(rain_preds)):
+        delta = abs(rain_preds[i][1] - rain_preds[i-1][1])
+        assert delta <= RAIN_MAX_JUMP, (
+            f"Rainfall jump exceeded {RAIN_MAX_JUMP} vph: step {rain_preds[i-1][0]} mm/h -> "
+            f"{rain_preds[i][0]} mm/h changed volume by {delta:.1f} vph"
+        )
 

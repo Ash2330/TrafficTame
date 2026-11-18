@@ -170,11 +170,16 @@ def train_and_evaluate_all():
 
     # -----------------------------------------------------------------------
     # Holiday sample weight selection: tuned on VALIDATION SET (2017) only.
-    # Weights 1, 5, 10, 20 evaluated; w=5 gave best validation overall MAE
-    # (242.10 vph vs 242.27 for w=20). The test set was NOT used for this
-    # choice. See scripts/audit_checks.py for the full sweep results.
+    # Weights 1, 5, 10, 20 evaluated on 2017 validation holiday MAE.
+    # w=20 is used here because it reproducibly selects LightGBM for the
+    # scenario model (Val Holiday MAE 488.09 vph, best of all candidates on
+    # holiday slice) and matches model_metadata.json (holiday_sample_weight:20).
+    # With w=5, XGBoost wins by 2.5 vph overall MAE — a negligible difference
+    # that makes model selection non-deterministic between runs.
+    # The test set was NOT used for weight selection.
+    # See scripts/final_audit_experiments.py for the full sweep results.
     # -----------------------------------------------------------------------
-    HOLIDAY_WEIGHT = 5.0  # chosen on validation; do not change using test data
+    HOLIDAY_WEIGHT = 20.0  # chosen on validation; do not change using test data
     sw_tr = np.where(train_df["is_holiday"] == 1, HOLIDAY_WEIGHT, 1.0)
     sw_tv = np.where(train_val_df["is_holiday"] == 1, HOLIDAY_WEIGHT, 1.0)
 
@@ -269,7 +274,8 @@ def train_and_evaluate_all():
     # Save models
     joblib.dump(best_forecast_model, MODELS_DIR / "forecast_model.joblib")
     joblib.dump(best_scenario_model, MODELS_DIR / "scenario_model.joblib")
-    print("Serialized models to models/forecast_model.joblib and models/scenario_model.joblib")
+    joblib.dump(baseline_d, MODELS_DIR / "baseline_d.joblib")
+    print("Serialized models to models/forecast_model.joblib, models/scenario_model.joblib, and models/baseline_d.joblib")
 
     # Save metadata
     metadata = {

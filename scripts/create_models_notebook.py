@@ -171,13 +171,13 @@ def main():
 
     val_records = [
         {"Feature_Set": "Forecast", "Model": "Ridge (StandardScaler)", "MAE": 285.77, "RMSE": 399.58, "R2": 0.9594, "Accuracy": 88.58, "Within_1_Class": 99.97},
-        {"Feature_Set": "Forecast", "Model": "RandomForest", "MAE": 158.59, "RMSE": 246.81, "R2": 0.9845, "Accuracy": 93.06, "Within_1_Class": 100.00},
-        {"Feature_Set": "Forecast", "Model": "LightGBM", "MAE": 155.78, "RMSE": 239.08, "R2": 0.9855, "Accuracy": 92.92, "Within_1_Class": 100.00},
-        {"Feature_Set": "Forecast", "Model": "XGBoost (Selected Best)", "MAE": 153.46, "RMSE": 236.82, "R2": 0.9857, "Accuracy": 93.32, "Within_1_Class": 100.00},
-        {"Feature_Set": "Scenario", "Model": "Ridge (StandardScaler)", "MAE": 801.12, "RMSE": 1030.45, "R2": 0.7299, "Accuracy": 58.63, "Within_1_Class": 97.81},
-        {"Feature_Set": "Scenario", "Model": "RandomForest", "MAE": 248.63, "RMSE": 394.58, "R2": 0.9604, "Accuracy": 89.24, "Within_1_Class": 99.92},
-        {"Feature_Set": "Scenario", "Model": "LightGBM", "MAE": 243.06, "RMSE": 379.31, "R2": 0.9634, "Accuracy": 89.35, "Within_1_Class": 99.92},
-        {"Feature_Set": "Scenario", "Model": "XGBoost (Selected Best)", "MAE": 240.22, "RMSE": 378.27, "R2": 0.9636, "Accuracy": 89.44, "Within_1_Class": 99.93},
+        {"Feature_Set": "Forecast", "Model": "RandomForest", "MAE": 158.44, "RMSE": 246.29, "R2": 0.9846, "Accuracy": 93.02, "Within_1_Class": 100.00},
+        {"Feature_Set": "Forecast", "Model": "LightGBM (Selected Best)", "MAE": 150.53, "RMSE": 234.34, "R2": 0.9860, "Accuracy": 93.31, "Within_1_Class": 100.00},
+        {"Feature_Set": "Forecast", "Model": "XGBoost", "MAE": 151.86, "RMSE": 235.36, "R2": 0.9859, "Accuracy": 93.20, "Within_1_Class": 100.00},
+        {"Feature_Set": "Scenario", "Model": "Ridge (StandardScaler)", "MAE": 801.12, "RMSE": 1030.46, "R2": 0.7299, "Accuracy": 58.65, "Within_1_Class": 97.81},
+        {"Feature_Set": "Scenario", "Model": "RandomForest", "MAE": 244.98, "RMSE": 386.05, "R2": 0.9621, "Accuracy": 89.13, "Within_1_Class": 99.92},
+        {"Feature_Set": "Scenario", "Model": "LightGBM (Selected Best)", "MAE": 242.27, "RMSE": 374.61, "R2": 0.9643, "Accuracy": 89.16, "Within_1_Class": 99.97},
+        {"Feature_Set": "Scenario", "Model": "XGBoost", "MAE": 244.74, "RMSE": 377.51, "R2": 0.9638, "Accuracy": 89.16, "Within_1_Class": 99.95},
     ]
     val_table = pd.DataFrame(val_records)
 
@@ -194,11 +194,10 @@ def main():
     ))
 
     test_records = [
-        {"Model / Benchmark": "Forecast Model (XGBoost Refit)", "Feature Scope": "All (Lags + Rolling)", "Test MAE (vph)": 142.47, "Test RMSE (vph)": 221.89, "Test R2": 0.9874, "4-Class Accuracy (%)": 93.35, "Within-1-Class (%)": 99.98},
-        {"Model / Benchmark": "Scenario Model (XGBoost Refit)", "Feature Scope": "No Lags (What-If)", "Test MAE (vph)": 215.67, "Test RMSE (vph)": 359.02, "Test R2": 0.9670, "4-Class Accuracy (%)": 90.59, "Within-1-Class (%)": 99.91},
-        {"Model / Benchmark": "Baseline A (Historical Mean)", "Feature Scope": "Mean by (day, hour)", "Test MAE (vph)": 279.21, "Test RMSE (vph)": 475.74, "Test R2": 0.9420, "4-Class Accuracy (%)": 88.20, "Within-1-Class (%)": 99.78},
-        {"Model / Benchmark": "Baseline C (Seasonal Naive 168h)", "Feature Scope": "Volume at T-168", "Test MAE (vph)": 338.84, "Test RMSE (vph)": 648.05, "Test R2": 0.8924, "4-Class Accuracy (%)": 86.20, "Within-1-Class (%)": 99.34},
-        {"Model / Benchmark": "Baseline B (Persistence 1h)", "Feature Scope": "Volume at T-1", "Test MAE (vph)": 587.14, "Test RMSE (vph)": 812.39, "Test R2": 0.8309, "4-Class Accuracy (%)": 72.70, "Within-1-Class (%)": 98.75},
+        {"Model / Benchmark": "Forecast Model (LightGBM Refit)", "Feature Scope": "All (Lags + Rolling + Weather)", "Test MAE (vph)": 139.65, "Test RMSE (vph)": 217.38, "Test R2": 0.9879, "4-Class Accuracy (%)": 93.69, "Within-1-Class (%)": 99.98},
+        {"Model / Benchmark": "Scenario Model (LightGBM Refit)", "Feature Scope": "No Lags (What-If Inputs)", "Test MAE (vph)": 218.86, "Test RMSE (vph)": 364.56, "Test R2": 0.9659, "4-Class Accuracy (%)": 90.50, "Within-1-Class (%)": 99.92},
+        {"Model / Benchmark": "Baseline A (Refit on Train+Val)", "Feature Scope": "Mean by (day, hour)", "Test MAE (vph)": 268.77, "Test RMSE (vph)": 469.44, "Test R2": 0.9435, "4-Class Accuracy (%)": 88.96, "Within-1-Class (%)": 99.62},
+        {"Model / Benchmark": "Baseline D (Historical Mean)", "Feature Scope": "Mean by (day_type, hour, month)", "Test MAE (vph)": 272.65, "Test RMSE (vph)": 429.48, "Test R2": 0.9527, "4-Class Accuracy (%)": 88.56, "Within-1-Class (%)": 99.88},
     ]
     test_table = pd.DataFrame(test_records)
 

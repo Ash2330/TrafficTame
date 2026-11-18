@@ -17,6 +17,7 @@ if str(PROJECT_ROOT) not in sys.path:
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
+import joblib
 
 from src.predict import (
     build_scenario_feature_row,
@@ -24,9 +25,23 @@ from src.predict import (
     predict_volume,
     volume_to_level,
 )
-from src.features import load_congestion_thresholds
+from src.features import load_congestion_thresholds, BaselineDHistoricalMean
 
 MODELS_DIR = Path("models")
+_BASELINE_D_MODEL = None
+
+
+def _get_baseline_d():
+    """Lazy loader for Baseline D model (used for holiday scenario routing)."""
+    global _BASELINE_D_MODEL
+    if _BASELINE_D_MODEL is None:
+        p = MODELS_DIR / "baseline_d.joblib"
+        if p.exists():
+            try:
+                _BASELINE_D_MODEL = joblib.load(p)
+            except Exception:
+                _BASELINE_D_MODEL = None
+    return _BASELINE_D_MODEL
 
 # Color palette mapped to congestion tiers
 CONGESTION_COLORS = {
@@ -132,18 +147,28 @@ def get_scenario_prediction(
     """
     Compute single-point scenario prediction with demand multiplier and uncertainty.
     """
-    feat_row = build_scenario_feature_row(
-        hour=hour,
-        weekday=weekday,
-        month=month,
-        temp_c=temp_c,
-        rain_1h=rain_1h,
-        snow_1h=snow_1h,
-        clouds_all=clouds_all,
-        weather_main=weather_main,
-        is_holiday=is_holiday,
-    )
-    raw_vol = float(predict_volume(feat_row, model_type="scenario")[0])
+    # Option 2 Routing: If is_holiday == 1, route to Baseline D historical lookup table
+    # Selected on 2017 Validation Set (Val Holiday MAE 404.8 vph vs 485.8 vph for ML model)
+    base_d = _get_baseline_d() if is_holiday == 1 else None
+    if is_holiday == 1 and base_d is not None:
+        df_h = pd.DataFrame([{"day_type": 2, "hour": hour, "month": month}])
+        raw_vol = float(base_d.predict(df_h)[0])
+        is_holiday_routed = True
+    else:
+        feat_row = build_scenario_feature_row(
+            hour=hour,
+            weekday=weekday,
+            month=month,
+            temp_c=temp_c,
+            rain_1h=rain_1h,
+            snow_1h=snow_1h,
+            clouds_all=clouds_all,
+            weather_main=weather_main,
+            is_holiday=is_holiday,
+        )
+        raw_vol = float(predict_volume(feat_row, model_type="scenario")[0])
+        is_holiday_routed = False
+
     scaled_vol = float(np.clip(raw_vol * demand_mult, 0, None))
     level = str(volume_to_level(scaled_vol))
     color = CONGESTION_COLORS.get(level, "#95a5a6")
@@ -158,6 +183,7 @@ def get_scenario_prediction(
         "volume_lower": max(0.0, round(scaled_vol - uncertainty, 1)),
         "volume_upper": round(scaled_vol + uncertainty, 1),
         "demand_multiplier": demand_mult,
+        "is_holiday_routed": is_holiday_routed,
     }
 
 

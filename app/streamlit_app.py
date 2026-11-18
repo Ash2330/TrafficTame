@@ -196,6 +196,15 @@ with tab1:
         sel_weather_idx = weather_cats.index(default_vals["weather_main"]) if default_vals["weather_main"] in weather_cats else 0
         sel_weather = st.selectbox("Weather Condition (Macro):", weather_cats, index=sel_weather_idx)
 
+        st.markdown(
+            "<div class='flow-note'><b>Snow Response Note</b>: In the training dataset, 99.0% of hours categorized as Snow had <code>snow_1h = 0.0 mm</code> "
+            "(the station recorded the precipitation type without measuring liquid water equivalent). Consequently, the categorical weather selection accounts for ~-7.8% volume change, "
+            "while the snowfall intensity slider contributes an additional -6.2% (-14.0% combined). "
+            "The model's combined snow response (~ -13% to -14%) is somewhat larger than the empirical -9% to -10% volume reduction observed during winter rush hours, "
+            "partly because sub-zero temperatures and snow co-occur in winter commute data.</div>",
+            unsafe_allow_html=True,
+        )
+
         st.markdown("---")
         st.subheader("📈 Demand Scaling")
         sel_demand = st.slider(
@@ -253,6 +262,13 @@ with tab1:
         )
 
     # Top KPI Metrics Display
+    if pred.get("is_holiday_routed", False):
+        st.info(
+            "ℹ️ **Holiday Scenario Routing**: Because holiday traffic profiles vary widely across distinct federal holidays, "
+            "holiday predictions in the simulator are routed to the Baseline D historical lookup table (fit on Train+Val), "
+            "which achieved the lowest validation holiday MAE (404.8 vph vs. 485.8 vph for direct ML model variants)."
+        )
+
     kpi1, kpi2, kpi3, kpi4 = st.columns(4)
     with kpi1:
         st.metric("Predicted Traffic Volume", f"{pred['volume']:,.0f} vph", delta=f"{pred['volume'] - 3339:,.0f} vs median")
@@ -344,7 +360,7 @@ with tab2:
     st.subheader("Historical Replay: 1-Hour-Ahead Forecast Model")
     st.markdown(
         "Inspect the performance of the **Production Forecast Model** (which utilizes strictly past lags $T-1..T-168$ and rolling statistics) "
-        "on the held-out **2018 Test Set** (Jan 01, 2018 to Sep 30, 2018)."
+        "on the held-out **2018 Test Set** (Jan 01, 2018 to Sep 30, 2018; 6,494 retained hours across 273 days, with 58 hours skipped due to 4 discrete sensor outage gaps)."
     )
 
     replay_df = load_replay_data()

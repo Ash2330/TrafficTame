@@ -38,7 +38,7 @@ with sync_playwright() as p:
         "tab4_about_limitations"
     ]
     
-    for i in range(count):
+    for i in range(min(count, len(tab_names))):
         print(f"Clicking Tab {i+1} ({tab_names[i]})...")
         tab_buttons.nth(i).click()
         time.sleep(3.0)  # wait for tab content / charts to mount
